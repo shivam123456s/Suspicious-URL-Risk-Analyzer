@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Suspicious URL Risk Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<h1>Suspicious URL Risk Analyzer</h1>
+
+<form method="POST">
+
+    <input type="text" name="url" placeholder="Enter URL here" required>
+
+    <button type="submit">Analyze</button>
+
+</form>
+{% if report %}
+
+<div class="result-box">
+
+<h2>Security Scan Report</h2>
+
+<p><b>URL:</b> {{ report.url }}</p>
+<p><b>Domain:</b> {{ report.domain }}</p>
+<p><b>Protocol:</b> {{ report.protocol }}</p>
+<p><b>Scan Time:</b> {{ report.scan_time }}</p>
+
+</div>
+
+{% endif %}
+
+{% if extra %}
+
+<div class="result-box">
+
+<h2>Website Information</h2>
+
+<p><b>IP Address:</b> {{ extra.ip }}</p>
+<p><b>HTTP Status:</b> {{ extra.status }}</p>
+<p><b>Website Title:</b> {{ extra.title }}</p>
+<p><b>Security Rating:</b> {{ extra.rating }}</p>
+
+</div>
+
+{% endif %}
+
+{% if result %}
+
+<div class="result-box">
+
+<h2>Risk Score: {{ result.score }}%</h2>
+
+<div class="meter">
+    <div class="meter-fill" style="width: {{ result.score }}%;"></div> 
+</div>
+
+{% if level == "Safe" %}
+<p class="safe">🟢 Safe Website</p>
+{% elif level == "Suspicious" %}
+<p class="warning">🟡 Suspicious Website</p>
+{% else %}
+<p class="danger">🔴 Dangerous Website</p>
+{% endif %}
+
+<h3>Reasons:</h3>
+
+<ul>
+
+{% for r in result.reasons %}
+
+<li>{{ r }}</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+{% endif %}
+
+</body>
+</html>
