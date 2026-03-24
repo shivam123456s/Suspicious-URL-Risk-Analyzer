@@ -9,7 +9,8 @@ from bs4 import BeautifulSoup
 app = Flask(__name__)
 
 # Simple breach database (for demo)
-BREACHED_DOMAINS = [
+BREACHED_DOMAINS = [ 
+    
     "yahoo.com",
     "linkedin.com",
     "adobe.com",
