@@ -9,9 +9,11 @@
 
 <body>
 
+<div class="container">
+
 <h1>Suspicious URL Risk Analyzer</h1>
 
-<form method="POST">
+<form method="POST" class="form-box">
 
     <input type="text" name="url" placeholder="Enter URL here" required>
 
@@ -45,6 +47,12 @@
 <p><b>Security Rating:</b> {{ extra.rating }}</p>
 
 </div>
+<p><b>Security Headers:</b></p>
+<ul>
+{% for key, value in extra.headers.items() %}
+<li>{{ key }} : {{ value }}</li>
+{% endfor %}
+</ul>
 
 {% endif %}
 
@@ -81,6 +89,12 @@
 </div>
 
 {% endif %}
+{% if breach_warning %}
+<p style="color:red; font-weight:bold;">
+    {{ breach_warning }}
+</p>
+{% endif %}
 
+</div>
 </body>
 </html>
