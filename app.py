@@ -27,19 +27,17 @@ def check_virustotal(url):
     API_KEY = os.getenv("VT_API_KEY")
 
     if not API_KEY:
-        print("❌ API key not found")
         return None
 
     headers = {"x-apikey": API_KEY}
     data = {"url": url}
 
     try:
-        # Submit URL
         response = requests.post(
             "https://www.virustotal.com/api/v3/urls",
             headers=headers,
             data=data,
-            timeout=10
+            timeout=5
         )
 
         if response.status_code != 200:
@@ -47,18 +45,15 @@ def check_virustotal(url):
 
         url_id = response.json()["data"]["id"]
 
-        # Get report
         report = requests.get(
             f"https://www.virustotal.com/api/v3/analyses/{url_id}",
             headers=headers,
-            timeout=10
+            timeout=5
         )
 
-        stats = report.json()["data"]["attributes"]["stats"]
-        return stats
+        return report.json()["data"]["attributes"]["stats"]
 
-    except Exception as e:
-        print("VT ERROR:", e)
+    except:
         return None
 
 
@@ -66,7 +61,7 @@ def check_virustotal(url):
 def check_ssl(domain):
     try:
         ctx = ssl.create_default_context()
-        with socket.create_connection((domain, 443), timeout=5) as sock:
+        with socket.create_connection((domain, 443), timeout=3) as sock:
             with ctx.wrap_socket(sock, server_hostname=domain) as ssock:
                 cert = ssock.getpeercert()
 
@@ -79,8 +74,7 @@ def check_ssl(domain):
             "days_left": days_left,
         }
 
-    except Exception as e:
-        print("SSL ERROR:", e)
+    except:
         return {
             "status": "No SSL",
             "expiry": "N/A",
@@ -105,15 +99,10 @@ def home():
 
         url = request.form.get("url")
         use_vt = request.form.get("use_vt")
-        API_KEY = os.getenv("VT_API_KEY")
 
-        # ================= VALIDATION =================
         if not url:
             error = "Please enter a URL"
             return render_template("index.html", error=error)
-
-        if use_vt and not API_KEY:
-            error = "VirusTotal API key not configured"
 
         try:
             analyzer = URLAnalyzer(url)
@@ -123,39 +112,38 @@ def home():
             domain = parsed.netloc
             protocol = parsed.scheme
 
-            # ================= SSL =================
+            # SSL CHECK
             ssl_info = check_ssl(domain)
 
-            # ================= IP =================
+            # IP
             try:
                 ip = socket.gethostbyname(domain)
             except:
                 ip = "Unknown"
 
-            # ================= HTTP =================
+            # HTTP REQUEST (FAST + SAFE)
             try:
-                response = requests.get(url, timeout=10)
-                status = response.status_code
+                headers_req = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(url, headers=headers_req, timeout=3)
 
+                status = response.status_code
                 soup = BeautifulSoup(response.text, "html.parser")
                 title = soup.title.string if soup.title else "No title found"
-
                 headers = response.headers
 
-            except Exception as e:
-                print("REQUEST ERROR:", e)
-                status = "No response"
+            except:
+                status = "Blocked / Timeout"
                 title = "Unknown"
                 headers = {}
 
-            # ================= SECURITY HEADERS =================
+            # SECURITY HEADERS
             security_headers = {
                 "Content-Security-Policy": headers.get("Content-Security-Policy", "Not found"),
                 "Strict-Transport-Security": headers.get("Strict-Transport-Security", "Not found"),
                 "X-Frame-Options": headers.get("X-Frame-Options", "Not found"),
             }
 
-            # ================= SCORE SYSTEM =================
+            # ================= SCORE =================
             score = result.get("score", 0)
 
             if protocol != "https":
@@ -166,13 +154,13 @@ def home():
                 score += 20
                 result["reasons"].append("Invalid SSL certificate")
 
-            if status == "No response":
-                score += 25
+            if status == "Blocked / Timeout":
+                score += 20
                 result["reasons"].append("Server not responding")
 
             missing_headers = [k for k, v in security_headers.items() if v == "Not found"]
             if len(missing_headers) >= 2:
-                score += 15
+                score += 10
                 result["reasons"].append("Missing security headers")
 
             if domain in BREACHED_DOMAINS:
@@ -182,7 +170,7 @@ def home():
             score = min(score, 100)
             result["score"] = score
 
-            # ================= LEVEL =================
+            # LEVEL
             if score <= 30:
                 level = "Safe"
             elif score <= 70:
@@ -190,7 +178,7 @@ def home():
             else:
                 level = "Dangerous"
 
-            # ================= RATING =================
+            # RATING
             if score <= 20:
                 rating = "A"
             elif score <= 40:
@@ -200,13 +188,11 @@ def home():
             else:
                 rating = "D"
 
-            # ================= VIRUSTOTAL =================
-            if use_vt and API_KEY:
+            # VIRUSTOTAL (OPTIONAL)
+            if use_vt:
                 vt_result = check_virustotal(url)
-                if not vt_result:
-                    error = "VirusTotal failed or limit reached"
 
-            # ================= DATA =================
+            # FINAL DATA
             report = {
                 "url": url,
                 "domain": domain,
@@ -222,9 +208,8 @@ def home():
                 "rating": rating,
             }
 
-        except Exception as e:
-            print("MAIN ERROR:", e)
-            error = "Something went wrong while analyzing"
+        except:
+            error = "Something went wrong"
 
     return render_template(
         "index.html",
@@ -239,5 +224,6 @@ def home():
     )
 
 
+# ================= RUN =================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
