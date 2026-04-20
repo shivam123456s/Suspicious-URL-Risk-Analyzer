@@ -1,100 +1,142 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-
 <head>
-    
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <title>Suspicious URL Risk Analyzer</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 
 <body>
 
 <div class="container">
 
-<h1>Suspicious URL Risk Analyzer</h1>
+    <!-- THEME BUTTON -->
+    <button id="themeToggle">🌙 Dark Mode</button>
 
-<form method="POST" class="form-box">
+    <h1>Suspicious URL Risk Analyzer</h1>
 
-    <input type="text" name="url" placeholder="Enter URL here" required>
+    <!-- ERROR -->
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
 
-    <button type="submit">Analyze</button>
+    <!-- FORM -->
+    <form method="POST" class="form-box" id="scanForm">
 
-</form>
-{% if report %}
+        <!-- KEEP INPUT VALUE -->
+        <input type="text" name="url" placeholder="Enter URL here"
+               value="{{ request.form.url }}" required>
 
-<div class="result-box">
+        <button type="submit">ANALYZE</button>
 
-<h2>Security Scan Report</h2>
+        <!-- LOADER -->
+        <div id="loader" class="loader hidden"></div>
 
-<p><b>URL:</b> {{ report.url }}</p>
-<p><b>Domain:</b> {{ report.domain }}</p>
-<p><b>Protocol:</b> {{ report.protocol }}</p>
-<p><b>Scan Time:</b> {{ report.scan_time }}</p>
+        <!-- VIRUSTOTAL TOGGLE -->
+        <div class="toggle-container">
+            <label class="switch">
+                <input type="checkbox" name="use_vt"
+                       {% if request.form.use_vt %}checked{% endif %}>
+                <span class="slider"></span>
+            </label>
+            <span class="toggle-text">
+                Use VirusTotal Scan (slower but more accurate)
+            </span>
+        </div>
+
+    </form>
+
+    <!-- RESULTS (ONLY SHOW WHEN DATA EXISTS) -->
+    {% if report or extra or result or ssl_info or vt_result %}
+    <div class="result-container">
+
+        <!-- REPORT -->
+        {% if report %}
+        <div class="result-box">
+            <h2>Security Scan Report</h2>
+            <p><b>URL:</b> {{ report.url }}</p>
+            <p><b>Domain:</b> {{ report.domain }}</p>
+            <p><b>Protocol:</b> {{ report.protocol }}</p>
+            <p><b>Scan Time:</b> {{ report.scan_time }}</p>
+        </div>
+        {% endif %}
+
+        <!-- WEBSITE INFO -->
+        {% if extra %}
+        <div class="result-box">
+            <h2>Website Info</h2>
+            <p><b>IP:</b> {{ extra.ip }}</p>
+            <p><b>Status:</b> {{ extra.status }}</p>
+            <p><b>Title:</b> {{ extra.title }}</p>
+            <p><b>Rating:</b> {{ extra.rating }}</p>
+        </div>
+        {% endif %}
+
+        <!-- SSL INFO -->
+        {% if ssl_info %}
+        <div class="result-box">
+            <h2>SSL Info</h2>
+
+            {% if ssl_info.status == "Valid" %}
+            <p class="safe">🟢 Valid SSL</p>
+            {% else %}
+            <p class="danger">🔴 SSL Problem</p>
+            {% endif %}
+
+            <p><b>Expiry:</b> {{ ssl_info.expiry }}</p>
+            <p><b>Days Left:</b> {{ ssl_info.days_left }}</p>
+        </div>
+        {% endif %}
+
+        <!-- RISK RESULT -->
+        {% if result %}
+        <div class="result-box">
+            <h2>Risk Score: {{ result.score }}%</h2>
+
+            <div class="meter">
+                <div class="meter-fill" style="width: {{ result.score }}%;"></div>
+            </div>
+
+            {% if level == "Safe" %}
+            <p class="safe">🟢 Safe</p>
+            {% elif level == "Suspicious" %}
+            <p class="warning">🟡 Suspicious</p>
+            {% else %}
+            <p class="danger">🔴 Dangerous</p>
+            {% endif %}
+
+            <h3>Reasons</h3>
+            <ul>
+                {% for r in result.reasons %}
+                <li>{{ r }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- VIRUSTOTAL -->
+        {% if vt_result %}
+        <div class="result-box">
+            <h2>VirusTotal</h2>
+            <p><b>Malicious:</b> {{ vt_result.malicious }}</p>
+            <p><b>Suspicious:</b> {{ vt_result.suspicious }}</p>
+            <p><b>Harmless:</b> {{ vt_result.harmless }}</p>
+            <p><b>Undetected:</b> {{ vt_result.undetected }}</p>
+        </div>
+        {% else %}
+        <p style="color: gray; text-align:center;">
+            ⚠ VirusTotal scan not used
+        </p>
+        {% endif %}
+
+    </div>
+    {% endif %}
 
 </div>
 
-{% endif %}
+<!-- SCRIPT (MAKE SURE FILE EXISTS) -->
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 
-{% if extra %}
-
-<div class="result-box">
-
-<h2>Website Information</h2>
-
-<p><b>IP Address:</b> {{ extra.ip }}</p>
-<p><b>HTTP Status:</b> {{ extra.status }}</p>
-<p><b>Website Title:</b> {{ extra.title }}</p>
-<p><b>Security Rating:</b> {{ extra.rating }}</p>
-
-</div>
-<p><b>Security Headers:</b></p>
-<ul>
-{% for key, value in extra.headers.items() %}
-<li>{{ key }} : {{ value }}</li>
-{% endfor %}
-</ul>
-
-{% endif %}
-
-{% if result %}
-
-<div class="result-box">
-
-<h2>Risk Score: {{ result.score }}%</h2>
-
-<div class="meter">
-    <div class="meter-fill" style="width: {{ result.score }}%;"></div> 
-</div>
-
-{% if level == "Safe" %}
-<p class="safe">🟢 Safe Website</p>
-{% elif level == "Suspicious" %}
-<p class="warning">🟡 Suspicious Website</p>
-{% else %}
-<p class="danger">🔴 Dangerous Website</p>
-{% endif %}
-
-<h3>Reasons:</h3>
-
-<ul>
-
-{% for r in result.reasons %}
-
-<li>{{ r }}</li>
-
-{% endfor %}
-
-</ul>
-
-</div>
-
-{% endif %}
-{% if breach_warning %}
-<p style="color:red; font-weight:bold;">
-    {{ breach_warning }}
-</p>
-{% endif %}
-
-</div>
 </body>
 </html>

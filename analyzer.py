@@ -12,242 +12,133 @@ class URLAnalyzer:
         self.url = url
         self.score = 0
         self.reasons = []
+        self.domain = urlparse(url).netloc
+        self.whois_data = None  # cache WHOIS
 
     # -----------------------------
     # BASIC VALIDATION
     # -----------------------------
-
     def check_valid_url(self):
-
         if not validators.url(self.url):
             self.reasons.append("Invalid URL format")
             return False
-
         return True
 
     # -----------------------------
-    # RULE 1: HTTPS CHECK
+    # RULES
     # -----------------------------
-
     def check_https(self):
-
         if not self.url.startswith("https"):
             self.score += 20
             self.reasons.append("URL does not use HTTPS")
 
-    # -----------------------------
-    # RULE 2: URL LENGTH
-    # -----------------------------
-
     def check_url_length(self):
-
         length = len(self.url)
-
         if length >= 75:
-            self.score += 20
+            self.score += 15
             self.reasons.append("URL is very long")
         elif length >= 54:
-            self.score += 10
+            self.score += 8
             self.reasons.append("URL length is suspicious")
 
-    # -----------------------------
-    # RULE 3: IP ADDRESS
-    # -----------------------------
-
     def check_ip_address(self):
-
-        domain = urlparse(self.url).netloc
-
-        pattern = r"\d+\.\d+\.\d+\.\d+"
-
-        if re.match(pattern, domain):
+        try:
+            socket.inet_aton(self.domain)
             self.score += 25
             self.reasons.append("Domain uses IP address")
-
-    # -----------------------------
-    # RULE 4: URL SHORTENER
-    # -----------------------------
+        except:
+            pass
 
     def check_url_shortener(self):
-
-        shorteners = [
-            "bit.ly",
-            "tinyurl.com",
-            "goo.gl",
-            "t.co",
-            "ow.ly"
-        ]
-
-        for s in shorteners:
-            if s in self.url:
-                self.score += 20
-                self.reasons.append("URL uses shortening service")
-
-    # -----------------------------
-    # RULE 5: @ SYMBOL
-    # -----------------------------
+        shorteners = ["bit.ly", "tinyurl.com", "t.co", "goo.gl"]
+        if any(s in self.url for s in shorteners):
+            self.score += 20
+            self.reasons.append("URL uses shortening service")
 
     def check_at_symbol(self):
-
         if "@" in self.url:
             self.score += 25
             self.reasons.append("URL contains @ symbol")
 
-    # -----------------------------
-    # RULE 6: DOUBLE SLASH
-    # -----------------------------
-
     def check_double_slash(self):
-
-        position = self.url.rfind("//")
-
-        if position > 7:
+        if self.url.rfind("//") > 7:
             self.score += 10
             self.reasons.append("Suspicious redirect using //")
 
-    # -----------------------------
-    # RULE 7: HYPHEN IN DOMAIN
-    # -----------------------------
-
     def check_hyphen(self):
-
-        domain = urlparse(self.url).netloc
-
-        if "-" in domain:
-            self.score += 10
+        if "-" in self.domain:
+            self.score += 8
             self.reasons.append("Hyphen detected in domain")
 
-    # -----------------------------
-    # RULE 8: SUBDOMAIN COUNT
-    # -----------------------------
-
     def check_subdomain(self):
-
         extracted = tldextract.extract(self.url)
-
-        subdomain = extracted.subdomain
-
-        dots = subdomain.count(".")
-
-        if dots >= 2:
+        if extracted.subdomain.count(".") >= 2:
             self.score += 15
             self.reasons.append("Multiple subdomains detected")
 
-    # -----------------------------
-    # RULE 9: NUMBERS IN DOMAIN
-    # -----------------------------
-
     def check_numbers_in_domain(self):
-
-        domain = urlparse(self.url).netloc
-
-        if any(char.isdigit() for char in domain):
-            self.score += 10
+        if any(char.isdigit() for char in self.domain):
+            self.score += 8
             self.reasons.append("Numbers detected in domain")
 
-    # -----------------------------
-    # RULE 10: HTTPS TOKEN
-    # -----------------------------
-
     def check_https_token(self):
-
-        domain = urlparse(self.url).netloc
-
-        if "https" in domain:
-            self.score += 15
+        if "https" in self.domain:
+            self.score += 10
             self.reasons.append("HTTPS token inside domain")
 
-    # -----------------------------
-    # RULE 11: SUSPICIOUS KEYWORDS
-    # -----------------------------
-
     def check_keywords(self):
+        keywords = ["login", "verify", "secure", "account", "update", "bank"]
+        count = sum(1 for word in keywords if word in self.url.lower())
 
-        keywords = [
-            "login",
-            "verify",
-            "secure",
-            "account",
-            "update",
-            "bank",
-            "confirm",
-            "password"
-        ]
-
-        for word in keywords:
-            if word in self.url.lower():
-                self.score += 10
-                self.reasons.append(f"Suspicious keyword: {word}")
-
-    # -----------------------------
-    # RULE 12: SUSPICIOUS TLD
-    # -----------------------------
+        if count >= 2:
+            self.score += 15
+            self.reasons.append("Multiple suspicious keywords detected")
+        elif count == 1:
+            self.score += 8
+            self.reasons.append("Suspicious keyword detected")
 
     def check_tld(self):
-
         suspicious = ["xyz", "tk", "ml", "gq", "top"]
-
-        extracted = tldextract.extract(self.url)
-
-        if extracted.suffix in suspicious:
+        ext = tldextract.extract(self.url)
+        if ext.suffix in suspicious:
             self.score += 10
-            self.reasons.append(f"Suspicious domain extension: {extracted.suffix}")
+            self.reasons.append(f"Suspicious TLD: {ext.suffix}")
 
     # -----------------------------
-    # RULE 13: DOMAIN AGE
+    # WHOIS (CACHED)
     # -----------------------------
+    def load_whois(self):
+        if self.whois_data is None:
+            try:
+                self.whois_data = whois.whois(self.domain)
+            except Exception as e:
+                print("WHOIS ERROR:", e)
+                self.whois_data = {}
 
     def check_domain_age(self):
-
-        try:
-            domain = urlparse(self.url).netloc
-            w = whois.whois(domain)
-
-            if not w.creation_date:
-                self.score += 15
-                self.reasons.append("Domain age could not be verified")
-
-        except:
-            pass
-
-    # -----------------------------
-    # RULE 14: DOMAIN EXPIRY
-    # -----------------------------
+        self.load_whois()
+        if not self.whois_data or not self.whois_data.get("creation_date"):
+            self.score += 10
+            self.reasons.append("Domain age not verified")
 
     def check_domain_expiry(self):
-
-        try:
-            domain = urlparse(self.url).netloc
-            w = whois.whois(domain)
-
-            if w.expiration_date is None:
-                self.score += 10
-                self.reasons.append("Domain expiration unknown")
-
-        except:
-            pass
+        self.load_whois()
+        if not self.whois_data or not self.whois_data.get("expiration_date"):
+            self.score += 8
+            self.reasons.append("Domain expiry unknown")
 
     # -----------------------------
-    # RULE 15: DNS RECORD
+    # NETWORK
     # -----------------------------
-
     def check_dns_record(self):
-
         try:
-            domain = urlparse(self.url).netloc
-            socket.gethostbyname(domain)
+            socket.gethostbyname(self.domain)
         except:
             self.score += 20
             self.reasons.append("DNS record not found")
 
-    # -----------------------------
-    # RULE 16: PORT CHECK
-    # -----------------------------
-
     def check_port(self):
-
         parsed = urlparse(self.url)
-
         if parsed.port not in [None, 80, 443]:
             self.score += 10
             self.reasons.append("Non-standard port detected")
@@ -255,7 +146,6 @@ class URLAnalyzer:
     # -----------------------------
     # MAIN ANALYSIS
     # -----------------------------
-
     def analyze(self):
 
         if not self.check_valid_url():
@@ -278,29 +168,10 @@ class URLAnalyzer:
         self.check_dns_record()
         self.check_port()
 
+        # LIMIT SCORE
+        self.score = min(self.score, 100)
+
         return {
             "score": self.score,
             "reasons": self.reasons
         }
-
-
-# -----------------------------
-# MAIN PROGRAM
-# -----------------------------
-
-if __name__ == "__main__":
-
-    url = input("Enter URL: ")
-
-    analyzer = URLAnalyzer(url)
-
-    result = analyzer.analyze()
-
-    print("\nRisk Score:", result["score"])
-
-    print("\nReasons:")
-
-    for r in result["reasons"]:
-        print("-", r)
-
-
